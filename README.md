@@ -43,6 +43,12 @@ Understand The Architecture of our Ecommerce webapp
 - The DB and web app share the same namespace: `helm`.
 - The web app uses the DB service DNS name: `mysql-service.helm.svc.cluster.local`.
 - The DB init job loads schema and sample products.
+  - The DB-init Job depends on normal resources:
+    - app-config ConfigMap.
+    - db-init-cm ConfigMap.
+    - db-credentials Secret.
+    - mariadb-service.
+    - The MariaDB Pod.
 - The web app depends on ConfigMap and Secret values.
 
 ### Install Helm in Ubuntu 22.04 as this is the OS I'm using
@@ -80,7 +86,7 @@ If `kubectl` does not work yet, Helm will not work either, because Helm deploys 
 
 ### Helm
 
-5. Create a chart. This will create a directory named 'ecomwebapp'-a starter chart structure with sample templates. You would need to delete the sample templates in the templates/ and replace it with the Kuberenets manifests files with the file names we created above for the Helm template target. 
+5. Create a Helm "chart". This will create a directory named 'ecomwebapp'-a starter chart structure with sample templates. You would need to delete the sample templates in the templates/ and replace it with the Kuberenets manifests files with the file names we created above for the Helm template target. 
 ```bash
 helm create ecomwebapp
 ```  
@@ -143,25 +149,74 @@ helm lint ./ecomwebapp
 ```
 ![image alt](helm-lint.png)  
 
+
 8. Render without changing the cluster
 ```bash
 helm template ecomwebapp ./ecomwebapp --namespace ecomwebapp --debug > rendered.yaml
 ```  
 
-`helm template` will just validate the yaml files in our helm chart -in this case our 'ecomwebapp' helm chart and render them output into yaml file (rendered.yaml). Note that this does not interact with the kubeapi-server and install anything. Again, it just simply validates the yaml files in the chart and render it.  
+`helm template` will just validate the yaml files in our helm chart -in this case our 'ecomwebapp' helm chart, render them and output into yaml file (rendered.yaml). Note that this does NOT interact with the kubeapi-server and install anything. Again, it just simply validates the yaml files in the chart and render it.  
+
 Inspect the result.
 ```bash
 less rendered.yaml
 ```
 
-9. Before installing the chart, it's best to '--debug' and '--dry-run' first to check and know the issues associated with your helm chart. We can:
-Ask the Kubernetes API server to validate the rendered manifests
+9. Before installing the chart, it's a best practice to '--debug' and '--dry-run' first to check and know the issues associated with your helm chart. We can:
+Ask the Kubernetes API server to validate the rendered manifests. NOTE: You will get an error `namespace does not exist` and it's normal. Simply because this is namespaced and the namespace doesn't exist yet. Other than that you will see a preview of the objects that will be created in yaml format in your terminal. 
 ```bash
 kubectl apply --dry-run=server -f rendered.yaml
 ```
+![image alt](k-apply-dry-run-server.png)
+
 Or
+
 ```bash
+helm install <release_name> ./<chart_name> --debug --dry-run
 helm install ecomwebapp ./ecomwebapp --debug --dry-run
 ```
-The difference is between kubectl apply --dry-run=server and helm install
 
+
+The `kubectl apply --dry-run=server` and `helm install` with `--debug1` & `--dry-run` flags both preview a deployment without creating the resources and validates different layers of the process. 
+The `--debug` and `--dry-run` are Helm flags commonly used together to inspect and validate a chart before actually deploying/installing it. The `--dry-run` simulates an operation before without changing the cluster.
+
+
+10. After both validations succeeded, Install or deploy the Helm Chart. 
+```bash
+helm install ecomwebapp ./ecomwebapp \
+  --namespace helm \
+  --create-namespace \
+  --wait \
+  --timeout 10m
+```
+
+Here:  
+First `ecomwebapp`: the Helm release name.
+`./ecomwebapp`: the chart directory.  
+`--namespace helm`: the target namespace.  
+`--create-namespace`: creates it if necessary.  
+`--wait`: waits for resources to become ready.  
+`--timeout 10m`: gives the deployment up to ten minutes.  
+
+11. Check all Kubernetes and resources are created successfully. 
+```bash
+k -n helm get all
+```
+![image alt](k-get-all.png)  
+
+The Kubernetes objects look healthy as you can see above, but the Helm release status records the result of the previous Helm operation. In my case, revision 2 and 3 was marked failed because the Helm command timed out or a hook failed at that time -I did some troubleshooting earlier as I used `pre-install` and `pre-upgrade` for the db hooks in my db-init-job. The db-init-job is dependent on "normal chart resources" such as: app-config and db-init-cm configmaps, db-credentials secret, mariadb service and mariadb pod. In a nut shell. a `pre-install` hooks run after Helm renders the chart but BEFORE the normal chart resources are created. So it errors out as the `pre-install` hook runs before the normal chart resources are created. I changed this to `post-install` and `post-upgrade` so that the normal chart resources are created first then Helm runs the db-init-job. With this, Helm does not automatically change a failed revision to deployed merely because the Pods later recover.
+```bash
+helm status ecomwebapp -n helm
+```
+![image alt](helm-status.png)  
+
+11. Checkout our Ecommerce webapp via localhost in a browser. 
+```bash
+k -n helm port-forward svc/ecom-web-svc 8080:80
+```
+
+Open a browser and paste http://localhost:8080/  
+![image alt](ecommerce-website.png)
+
+
+# Thank you and happy Helming! :)

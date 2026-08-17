@@ -5,8 +5,8 @@ namespace:
 web:
   replicaCount: 2
   image:
-    repository: testyoc/ecomwebapp
-    tag: v2
+    repository: testyoc/ecom-web-helm
+    tag: v1
     pullPolicy: IfNotPresent
   service:
     name: ecom-web-svc
