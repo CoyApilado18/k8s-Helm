@@ -41,7 +41,7 @@ All of these resources are managed as one logical application stack: web app + M
 # Commands and Notes
 Understand The Architecture of our Ecommerce webapp  
 - The DB and web app share the same namespace: `helm`.
-- The web app uses the DB service DNS name: `mysql-service.helm.svc.cluster.local`.
+- The web app uses the DB service DNS name: `mariadb-service.helm.svc.cluster.local`.
 - The DB init job loads schema and sample products.
   - The DB-init Job depends on normal resources:
     - app-config ConfigMap.
@@ -140,14 +140,14 @@ ls -R ecomwebapp/
 You should expect something like:  
 - [Chart.yaml](https://helm.sh/docs/topics/charts/#the-chartyaml-file)  
 - [values.yaml](https://helm.sh/docs/chart_best_practices/values/#document-valuesyaml)  
-- templates/ - This is where your Kubernetes YAML goes, but with Helm variables like  
+- templates/ - This is where our Kubernetes YAML goes and store the Kubernetes manifest files written with Go template syntax.
 - [charts/](https://helm.sh/docs/topics/charts/)  
 
 7. Check YAML and Helm Syntax. This will catch chart and YAML problems.
 ```bash
 helm lint ./ecomwebapp
 ```
-![image alt](helm-lint.png)  
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/be68aa6ded7509b573b5b96adb8151baeb7df517/images/helm-lint.png)  
 
 
 8. Render without changing the cluster
@@ -167,7 +167,7 @@ Ask the Kubernetes API server to validate the rendered manifests. NOTE: You will
 ```bash
 kubectl apply --dry-run=server -f rendered.yaml
 ```
-![image alt](k-apply-dry-run-server.png)
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/be68aa6ded7509b573b5b96adb8151baeb7df517/images/k-apply-dry-run-server.png)
 
 Or
 
@@ -202,21 +202,21 @@ First `ecomwebapp`: the Helm release name.
 ```bash
 k -n helm get all
 ```
-![image alt](k-get-all.png)  
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/be68aa6ded7509b573b5b96adb8151baeb7df517/images/k-get-all.png)  
 
 The Kubernetes objects look healthy as you can see above, but the Helm release status records the result of the previous Helm operation. In my case, revision 2 and 3 was marked failed because the Helm command timed out or a hook failed at that time -I did some troubleshooting earlier as I used `pre-install` and `pre-upgrade` for the db hooks in my db-init-job. The db-init-job is dependent on "normal chart resources" such as: app-config and db-init-cm configmaps, db-credentials secret, mariadb service and mariadb pod. In a nut shell. a `pre-install` hooks run after Helm renders the chart but BEFORE the normal chart resources are created. So it errors out as the `pre-install` hook runs before the normal chart resources are created. I changed this to `post-install` and `post-upgrade` so that the normal chart resources are created first then Helm runs the db-init-job. With this, Helm does not automatically change a failed revision to deployed merely because the Pods later recover.
 ```bash
 helm status ecomwebapp -n helm
 ```
-![image alt](helm-status.png)  
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/be68aa6ded7509b573b5b96adb8151baeb7df517/images/helm-status.png)  
 
-11. Checkout our Ecommerce webapp via localhost in a browser. 
+11. Run this command in a separate terminal
 ```bash
 k -n helm port-forward svc/ecom-web-svc 8080:80
 ```
 
-Open a browser and paste http://localhost:8080/  
-![image alt](ecommerce-website.png)
+12. Open a browser then checkout our Ecommerce webapp via localhost and you should see our webapp.
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/be68aa6ded7509b573b5b96adb8151baeb7df517/images/ecommerce-website.png)
 
 
 # Thank you and happy Helming! :)
