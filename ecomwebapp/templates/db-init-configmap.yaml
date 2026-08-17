@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.init.configMapName }}
+  namespace: {{ .Values.namespace.name }}
+data:
+  db-load-script.sql: |
+{{ .Values.init.script | nindent 4 }}

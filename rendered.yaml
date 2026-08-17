@@ -1,0 +1,386 @@
+---
+# Source: ecomwebapp/templates/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: helm
+---
+# Source: ecomwebapp/templates/db-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: helm
+type: Opaque
+stringData:
+  username: "ecomuser"
+  password: "ecompassword"
+  rootpassword: "ecomrootpassword"
+---
+# Source: ecomwebapp/templates/db-app-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: helm
+data:
+  DB_HOST: "mariadb-service.helm.svc.cluster.local"
+  DB_NAME: "ecomdb"
+  FEATURE_DARK_MODE: "false"
+---
+# Source: ecomwebapp/templates/db-init-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-cm
+  namespace: helm
+data:
+  db-load-script.sql: |
+
+    CREATE DATABASE IF NOT EXISTS ecomdb;
+    USE ecomdb;
+    
+    CREATE TABLE IF NOT EXISTS Products (
+      id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+      Name VARCHAR(255) DEFAULT NULL,
+      Price VARCHAR(255) DEFAULT NULL,
+      ImageUrl VARCHAR(255) DEFAULT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_products_name_imageurl (Name, ImageUrl)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    
+    INSERT INTO Products (Name, Price, ImageUrl)
+    VALUES
+      ('Laptop', '100', 'c-1.png'),
+      ('Drone', '200', 'c-2.png'),
+      ('VR', '300', 'c-3.png'),
+      ('Tablet', '50', 'c-5.png'),
+      ('Watch', '90', 'c-6.png'),
+      ('Phone Covers', '20', 'c-7.png'),
+      ('Phone', '80', 'c-8.png'),
+      ('Laptop', '150', 'c-4.png')
+    ON DUPLICATE KEY UPDATE
+      Price = VALUES(Price),
+      ImageUrl = VALUES(ImageUrl);
+---
+# Source: ecomwebapp/templates/db-pv-pvc.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv1
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data/mysql
+---
+# Source: ecomwebapp/templates/db-pv-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc1
+  namespace: helm
+spec:
+  accessModes:
+
+    - ReadWriteOnce
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 2Gi
+---
+# Source: ecomwebapp/templates/db-mariadb-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-service
+  namespace: helm
+  labels:
+    app: mariadb
+spec:
+  ports:
+    - name: mariadb
+      port: 3306
+      targetPort: 3306
+      protocol: TCP
+  selector:
+    app: mariadb
+---
+# Source: ecomwebapp/templates/web-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecom-web-svc
+  namespace: helm
+  labels:
+    app: ecom-webapp
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: ecom-webapp
+---
+# Source: ecomwebapp/templates/db-mariadb-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: helm
+  labels:
+    app: mariadb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+        - name: mariadb
+          image: "mariadb:10.5"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_DATABASE
+              value: "ecomdb"
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: rootpassword
+          ports:
+            - name: mariadb
+              containerPort: 3306
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --silent
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+          resources:
+
+            {}
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc1
+---
+# Source: ecomwebapp/templates/web-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecom-webapp
+  namespace: helm
+  labels:
+    app: ecom-webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ecom-webapp
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ecom-webapp
+    spec:
+      containers:
+        - name: ecom-webapp
+          image: "testyoc/ecomwebapp:v2"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /readyz.php
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz.php
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_HOST
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: FEATURE_DARK_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: FEATURE_DARK_MODE
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: rootpassword
+---
+# Source: ecomwebapp/templates/hpa.yaml
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ecom-webapp-hpa
+  namespace: helm
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ecom-webapp
+  targetCPUUtilizationPercentage: 50
+---
+# Source: ecomwebapp/templates/db-init-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ecomwebapp-db-init-1
+  namespace: helm
+  labels:
+    app: db-init
+    app.kubernetes.io/managed-by: Helm
+  annotations: # Helm hook 
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  backoffLimit: 4
+  template:
+    metadata:
+      labels:
+        app: db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          image: "mysql:8.0"
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for database..."
+              until mysqladmin ping -h"${DB_HOST}" -u"${DB_USER}" -p"${DB_PASSWORD}" --silent; do
+                sleep 2
+              done
+              echo "Running db-load-script.sql..."
+              mysql -h"${DB_HOST}" \
+                -u"${DB_USER}" \
+                -p"${DB_PASSWORD}" \
+                "${DB_NAME}" < /scripts/db-load-script.sql
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_HOST
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+          volumeMounts:
+            - name: db-init-script
+              mountPath: /scripts/db-load-script.sql
+              subPath: db-load-script.sql
+              readOnly: true
+      volumes:
+        - name: db-init-script
+          configMap:
+            name: db-init-cm
+            items:
+              - key: db-load-script.sql
+                path: db-load-script.sql

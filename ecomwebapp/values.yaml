@@ -1,0 +1,124 @@
+namespace:
+  create: true
+  name: helm
+
+web:
+  replicaCount: 2
+  image:
+    repository: testyoc/ecomwebapp
+    tag: v2
+    pullPolicy: IfNotPresent
+  service:
+    name: ecom-web-svc
+    type: LoadBalancer
+    port: 80
+    targetPort: 80
+  readinessProbe:
+    path: /readyz.php
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 6
+  livenessProbe:
+    path: /healthz.php
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+mariadb:
+  image:
+    repository: mariadb
+    tag: "10.5"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    name: mariadb-service
+    port: 3306
+    targetPort: 3306
+  database: ecomdb
+  storage:
+    enabled: true
+    persistentVolumeName: mysql-pv1
+    persistentVolumeClaimName: mysql-pvc1
+    size: 2Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: manual
+    reclaimPolicy: Retain
+    hostPath: /mnt/data/mysql
+  resources: {}
+  probes:
+    startup:
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 6
+    liveness:
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+credentials:
+  secretName: db-credentials
+  username: ecomuser
+  password: ecompassword
+  rootPassword: ecomrootpassword
+
+appConfig:
+  name: app-config
+  featureDarkMode: "false"
+
+init:
+  configMapName: db-init-cm
+  jobName: db-init-job
+  image:
+    repository: mysql
+    tag: "8.0"
+    pullPolicy: IfNotPresent
+  backoffLimit: 4
+  script: |
+    CREATE DATABASE IF NOT EXISTS ecomdb;
+    USE ecomdb;
+
+    CREATE TABLE IF NOT EXISTS Products (
+      id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+      Name VARCHAR(255) DEFAULT NULL,
+      Price VARCHAR(255) DEFAULT NULL,
+      ImageUrl VARCHAR(255) DEFAULT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_products_name_imageurl (Name, ImageUrl)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+    INSERT INTO Products (Name, Price, ImageUrl)
+    VALUES
+      ('Laptop', '100', 'c-1.png'),
+      ('Drone', '200', 'c-2.png'),
+      ('VR', '300', 'c-3.png'),
+      ('Tablet', '50', 'c-5.png'),
+      ('Watch', '90', 'c-6.png'),
+      ('Phone Covers', '20', 'c-7.png'),
+      ('Phone', '80', 'c-8.png'),
+      ('Laptop', '150', 'c-4.png')
+    ON DUPLICATE KEY UPDATE
+      Price = VALUES(Price),
+      ImageUrl = VALUES(ImageUrl);
+
+hpa:
+  enabled: true
+  name: ecom-webapp-hpa
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50

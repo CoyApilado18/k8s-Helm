@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.mariadb.storage.persistentVolumeName }}
+spec:
+  capacity:
+    storage: {{ .Values.mariadb.storage.size }}
+  accessModes:
+{{ toYaml .Values.mariadb.storage.accessModes | nindent 4 }}
+  persistentVolumeReclaimPolicy: {{ .Values.mariadb.storage.reclaimPolicy }}
+  storageClassName: {{ .Values.mariadb.storage.storageClassName }}
+  hostPath:
+    path: {{ .Values.mariadb.storage.hostPath }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.mariadb.storage.persistentVolumeClaimName }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  accessModes:
+{{ toYaml .Values.mariadb.storage.accessModes | nindent 4 }}
+  storageClassName: {{ .Values.mariadb.storage.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.mariadb.storage.size }}

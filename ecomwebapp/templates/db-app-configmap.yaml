@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.appConfig.name }}
+  namespace: {{ .Values.namespace.name }}
+data:
+  DB_HOST: {{ printf "%s.%s.svc.cluster.local" .Values.mariadb.service.name .Values.namespace.name | quote }}
+  DB_NAME: {{ .Values.mariadb.database | quote }}
+  FEATURE_DARK_MODE: {{ .Values.appConfig.featureDarkMode | quote }}

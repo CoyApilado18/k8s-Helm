@@ -1,6 +1,6 @@
 # Introduction  
 
-Welcome to my documentation of the Kubernetes challenge Extras -> [Package Everything in Helm](https://cloudresumechallenge.dev/docs/extensions/kubernetes-challenge/?utm_source=substack&utm_medium=email#package-everything-in-helm). This demo is for learning purposes only and a great way to gain a hands-on knowledge learning basic fundamentals packaging your Kubernetes cluster of your application into one single deployable unit.  
+Welcome to my documentation of the Kubernetes challenge Extras -> [Package Everything in Helm](https://cloudresumechallenge.dev/docs/extensions/kubernetes-challenge/?utm_source=substack&utm_medium=email#package-everything-in-helm). This demo is for learning purposes only and a great way to gain a hands-on knowledge learning basic fundamentals of Helm, packaging your application powered by Kubernetes into one single deployable unit.  
 
 Side Note: There's a containerized Ecommerce app that is part of this Kubernetes Challenge built for this Helm project -see my GitHub repo [learning-app-ecommerce-K8s-Resume-Challenge](https://github.com/CoyApilado18/learning-app-ecommerce-K8s-Resume-Challenge.git) and this is what we will use Helm for to package the Ecommerce webapp. Feel free to clone or fork my GitHub repo. It's a fully functional demo app where all the Kubernetes manifests are tested and ready for deployment to your Kubernetes cluster and you can use it for this Helm demo.  
 
@@ -20,12 +20,148 @@ Release - A specific installed instance of a chart in a cluster or a "named inst
 Repository - A published collection of Charts that you can install from an app store for Helm charts. 
 
 # Context
-- Package a containerized application that is managed by Kubernetes using Helm. 
+- Package a containerized application that is managed by Kubernetes using Helm.
 
 # Goal
-- Utilize Helm to package your application, making deployment and management on Kubernetes clusters more efficient and scalable.
+- Utilize Helm to package your application, making deployment and management on Kubernetes clusters more efficient and scalable. A single-stack deployment that includes the web application and database in one release. 
+
+What “one stack” means?  
+One Helm release (ecomwebapp) creates:  
+- 1 Namespace (ecomwebapp)
+- 1 Secret (db-credentials)
+- 2 ConfigMaps (db-init-cm, app-config)
+- 1 PersistentVolume + 1 PersistentVolumeClaim (for MySQL data)
+- 1 MariaDB Deployment + 1 Service
+- 1 DB init Job
+- 1 Web app Deployment + 1 Service
+- 1 HorizontalPodAutoscaler  
+
+All of these resources are managed as one logical application stack: web app + MariaDB + initialization logic.
 
 # Commands and Notes
+Understand The Architecture of our Ecommerce webapp  
+- The DB and web app share the same namespace: `helm`.
+- The web app uses the DB service DNS name: `mysql-service.helm.svc.cluster.local`.
+- The DB init job loads schema and sample products.
+- The web app depends on ConfigMap and Secret values.
 
+### Install Helm in Ubuntu 22.04 as this is the OS I'm using
 
+1. Update package lists 
+```bash
+sudo apt update
+```
+
+2. Install pre-requisites  
+```bash
+sudo apt install -y curl apt-transport-https
+```
+
+3. Download and install Helm  
+Use the official Helm install script:
+```bash
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+
+4. Verify installation  
+```bash
+helm version
+```  
+
+NOTE: Before using Helm, make sure 'kubectl' can talk to your cluster.  
+```bash
+kubectl cluster-info
+kubectl get nodes
+```
+- `kubectl cluster-info` shows cluster control-plane info.
+- `kubectl get nodes` confirms your cluster nodes are reachable.  
+
+If `kubectl` does not work yet, Helm will not work either, because Helm deploys into Kubernetes through your kubeconfig.
+
+### Helm
+
+5. Create a chart. This will create a directory named 'ecomwebapp'-a starter chart structure with sample templates. You would need to delete the sample templates in the templates/ and replace it with the Kuberenets manifests files with the file names we created above for the Helm template target. 
+```bash
+helm create ecomwebapp
+```  
+
+We have 2 manifests files; one for the webapp (ecomweb/) and one for the database (ecomdb/). In my GitHub repo learning-app-ecommerce-K8s-Resume-Challenge, the naming convention of the manifests files is numbered. I just named it this way so that objects will be created respectively. Though there is this concept in Kubernetes called "out-of-order" creation and tt uses declarative reconciliation. Say for example if a deployment for a db pod is created first and is referenced to a Secret object, the pod will be created and will fail to start but, once the Secret object is created, the db pod will start successfully. Where order does matters are; namespace, Helm hooks and CRDs (Custom Resource Definition). Note that those appended by 'db' belongs to the database objects and this is namespaced. We will map these manifests to Helm templates/ and rename these current files to the Helm template target files for more readable context.  
+
+| Current file | Helm template target |
+Database files  
+| `01-db-namespace.yaml` | `templates/namespace.yaml` |
+| `02-db-credentials.yaml` | `templates/db-secret.yaml` |
+| `03-db-init-cm.yaml` | `templates/db-init-configmap.yaml` |
+| `04-db-app-config.yaml` | `templates/db-app-configmap.yaml` |
+| `05-db-pv-pvc.yaml` | `templates/db-pv-pvc.yaml` |
+| `06-db-mariadb-deployment.yaml` | `templates/db-mariadb-deployment.yaml` |
+| `07-db-mariadb-service.yaml` | `templates/db-mariadb-service.yaml` |
+| `08-db-init-job.yaml` | `templates/db-init-job.yaml` |
+
+Webapp files 
+| `01-website-deployment.yaml` | `templates/web-deployment.yaml` |
+| `02-website-service.yaml` | `templates/web-service.yaml` |
+| `03-hpa-ecomwebapp.yaml` | `templates/hpa.yaml` |  
+
+Remove the generated starter files in the templates/ and convert the Kubernetes manifests files from ecomdb/ and ecomweb/ into Helm expressions and save it in the templates/. See templates/ and values.yaml. 
+```bash
+rm -rf ecomwebapp/templates/deployment.yaml \
+      ecomwebapp/templates/service.yaml \
+      ecomwebapp/templates/ingress.yaml \
+      ecomwebapp/templates/hpa.yaml \
+      ecomwebapp/templates/serviceaccount.yaml \
+      ecomwebapp/templates/httproute.yaml \
+      ecomwebapp/templates/NOTES.txt
+```
+
+The Helm chart just:  
+- Wraps all of those into one chart.
+- Parameterizes them via values.yaml.
+- Deploys them together under one release name.
+
+Why this is useful?  
+- You can treat the whole ecommerce app (web + DB) as one unit for install, upgrade, and rollback.
+- Changing image tags, replicas, feature flags, etc. only requires editing values.yaml and running helm upgrade.
+- If something goes wrong, you can roll back the entire stack with helm rollback.  
+
+We can split this later on into separate charts; one chart for the webapp and one chart for the database. 
+
+6. Inspect the chart structure. This will show the chart's files and directories created by Helm.
+```bash
+ls -R ecomwebapp/
+```  
+
+You should expect something like:  
+- [Chart.yaml](https://helm.sh/docs/topics/charts/#the-chartyaml-file)  
+- [values.yaml](https://helm.sh/docs/chart_best_practices/values/#document-valuesyaml)  
+- templates/ - This is where your Kubernetes YAML goes, but with Helm variables like  
+- [charts/](https://helm.sh/docs/topics/charts/)  
+
+7. Check YAML and Helm Syntax. This will catch chart and YAML problems.
+```bash
+helm lint ./ecomwebapp
+```
+![image alt](helm-lint.png)  
+
+8. Render without changing the cluster
+```bash
+helm template ecomwebapp ./ecomwebapp --namespace ecomwebapp --debug > rendered.yaml
+```  
+
+`helm template` will just validate the yaml files in our helm chart -in this case our 'ecomwebapp' helm chart and render them output into yaml file (rendered.yaml). Note that this does not interact with the kubeapi-server and install anything. Again, it just simply validates the yaml files in the chart and render it.  
+Inspect the result.
+```bash
+less rendered.yaml
+```
+
+9. Before installing the chart, it's best to '--debug' and '--dry-run' first to check and know the issues associated with your helm chart. We can:
+Ask the Kubernetes API server to validate the rendered manifests
+```bash
+kubectl apply --dry-run=server -f rendered.yaml
+```
+Or
+```bash
+helm install ecomwebapp ./ecomwebapp --debug --dry-run
+```
+The difference is between kubectl apply --dry-run=server and helm install
 
