@@ -314,7 +314,7 @@ echo "$CR_PAT" | helm registry login ghcr.io \
 19. Push the packaged chart to GHCR
 ```bash
 helm push ecomwebapp-0.1.0.tgz \
-  oci://ghcr.io/<gith-username>/helm-charts
+  oci://ghcr.io/<github-username>/helm-charts
 ```
 ![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/7a9c14986d61a6127ca8602233890fdc3b60cfa9/images/pushed-packaged-ghcrio.png)
 
@@ -336,9 +336,9 @@ Extract it:
 tar -xzf ecomwebapp-0.1.1.tgz
 ```
 
-Then refer to steps 7,8,9 and 10 (helm install) to install the Chart.
+### Then refer to steps 7,8,9 and 10 (helm install) to install the Chart.
  
-Or the easiest, just use the `helm` pull with `--untar` flag if you are pulling the chart from my GHCR. The command belo tells Helm to download and extract it in one command.
+Or the easiest, just use the `helm` pull with `--untar` flag if you are pulling the chart from my GHCR. The command below tells Helm to download and extract it in one command the install the chart.
 ```bash
 helm pull \
   oci://ghcr.io/coyapilado18/helm-charts/ecomwebapp \
