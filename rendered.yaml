@@ -237,7 +237,7 @@ spec:
     spec:
       containers:
         - name: ecom-webapp
-          image: "testyoc/ecomwebapp:v2"
+          image: "testyoc/ecom-web-helm:v1"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

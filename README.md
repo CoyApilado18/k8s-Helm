@@ -219,4 +219,101 @@ k -n helm port-forward svc/ecom-web-svc 8080:80
 ![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/be68aa6ded7509b573b5b96adb8151baeb7df517/images/ecommerce-website.png)
 
 
+### Publish as an OCI artifact and store to GHCR
+
+13. Before publishing, check chart contents. 
+```bash
+tree ecomwebapp
+```
+![image alt](tree-ecomwebapp.png)
+
+Your Chart.yaml currently identifies it as an application chart named ecomwebapp with chart version 0.1.0 and application version v2.
+
+14. Update Chart.yaml before publishing. Since you have now built the fixed web image testyoc/ecom-web-helm:v1, this is a good first chart release:
+apiVersion: v2  
+name: ecomwebapp  
+description: Helm chart for the ecommerce web application and MariaDB  
+type: application  
+version: 0.1.0  
+appVersion: "v1"  
+
+Important distinction:  
+`version: 0.1.0` = chart version; update it whenever templates or defaults change.  
+`appVersion: "v1"` = informational version of your application image.  
+Helm uses `version` in the packaged chart filename:  
+`ecomwebapp-0.1.0.tgz`
+
+14. Make values.yaml match the deployed web image. For a reproducible chart release, store your actual image defaults:
+```bash
+web:
+  image:
+    repository: testyoc/ecom-web-helm
+    tag: v1
+    pullPolicy: IfNotPresent
+```
+Our template renders the image from `web.image.repository` and `web.image.tag`.
+
+15. Do not publish real secrets
+Our current chart includes demo DB credentials in values.yaml and renders them into a Kubernetes Secret using stringData.
+
+For this learning project, you can publish placeholders, but do not publish reusable real credentials. Use clearly non-production defaults:
+values.yaml
+```bash
+credentials:
+  secretName: db-credentials
+  username: CHANGE_ME
+  password: CHANGE_ME
+  rootPassword: CHANGE_ME
+```
+
+A more production-ready next step would support an existing Secret or External Secrets. We can improve that after publishing the first chart.
+
+### Validate the Chart
+
+16. Perform step 7 (helm lint) & 8 (helm template) again to validate then confirm the application image by running the command:
+```bash
+grep -n 'image: "testyoc/ecom-web-helm:v1"' rendered.yaml
+```
+![image alt](grep-rendered.png)
+
+### Package the Chart
+17. Run:
+```bash
+helm package ./ecomwebapp
+```
+Helm reads Chart.yaml, validates the chart, and creates:
+![image alt](helm-packaged.png)
+
+Inspect the package contents:
+```bash
+tar -tzf ecomwebapp-0.1.0.tgz
+```
+![image alt](tar-tzf.png)
+
+### Authenticate Helm with GHCR
+18. To push from your laptop, create a GitHub Personal Access Token with package-write permission.
+For a classic PAT, give it:
+`write:packages`
+`read:packages`
+`repo` only if the GitHub repository is private and GitHub requests it for package association
+Keep the token private; do not commit it or paste it into a shell history.
+
+Export it only for your terminal session:
+```bash
+export CR_PAT='PASTE_YOUR_GITHUB_TOKEN_HERE'
+```
+Log in:  
+```bash
+echo "$CR_PAT" | helm registry login ghcr.io \
+  --username <your-github-username> \
+  --password-stdin
+```
+
+19. Push the packaged chart to GHCR
+```bash
+helm push ecomwebapp-0.1.0.tgz \
+  oci://ghcr.io/CoyApilado18/helm-charts
+```
+![image alt](pushed-packaged-ghcrio.png)
+
 # Thank you and happy Helming! :)
