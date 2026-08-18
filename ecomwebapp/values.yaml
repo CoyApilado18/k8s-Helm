@@ -73,9 +73,9 @@ mariadb:
 
 credentials:
   secretName: db-credentials
-  username: ecomuser
-  password: ecompassword
-  rootPassword: ecomrootpassword
+  username: <CHANGE_ME>
+  password: <CHANGE_ME>
+  rootPassword: <CHANGE_ME>
 
 appConfig:
   name: app-config

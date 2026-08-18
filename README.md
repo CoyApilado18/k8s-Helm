@@ -225,17 +225,19 @@ k -n helm port-forward svc/ecom-web-svc 8080:80
 ```bash
 tree ecomwebapp
 ```
-![image alt](tree-ecomwebapp.png)
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/7a9c14986d61a6127ca8602233890fdc3b60cfa9/images/tree-ecomwebapp.png)
 
 Your Chart.yaml currently identifies it as an application chart named ecomwebapp with chart version 0.1.0 and application version v2.
 
 14. Update Chart.yaml before publishing. Since you have now built the fixed web image testyoc/ecom-web-helm:v1, this is a good first chart release:
+```bash
 apiVersion: v2  
 name: ecomwebapp  
 description: Helm chart for the ecommerce web application and MariaDB  
 type: application  
 version: 0.1.0  
 appVersion: "v1"  
+```
 
 Important distinction:  
 `version: 0.1.0` = chart version; update it whenever templates or defaults change.  
@@ -274,7 +276,7 @@ A more production-ready next step would support an existing Secret or External S
 ```bash
 grep -n 'image: "testyoc/ecom-web-helm:v1"' rendered.yaml
 ```
-![image alt](grep-rendered.png)
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/7a9c14986d61a6127ca8602233890fdc3b60cfa9/images/grep-rendered.png)
 
 ### Package the Chart
 17. Run:
@@ -282,13 +284,13 @@ grep -n 'image: "testyoc/ecom-web-helm:v1"' rendered.yaml
 helm package ./ecomwebapp
 ```
 Helm reads Chart.yaml, validates the chart, and creates:
-![image alt](helm-packaged.png)
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/7a9c14986d61a6127ca8602233890fdc3b60cfa9/images/helm-packaged.png)
 
 Inspect the package contents:
 ```bash
 tar -tzf ecomwebapp-0.1.0.tgz
 ```
-![image alt](tar-tzf.png)
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/7a9c14986d61a6127ca8602233890fdc3b60cfa9/images/tar-tzf.png)
 
 ### Authenticate Helm with GHCR
 18. To push from your laptop, create a GitHub Personal Access Token with package-write permission.
@@ -312,8 +314,36 @@ echo "$CR_PAT" | helm registry login ghcr.io \
 19. Push the packaged chart to GHCR
 ```bash
 helm push ecomwebapp-0.1.0.tgz \
-  oci://ghcr.io/CoyApilado18/helm-charts
+  oci://ghcr.io/<gith-username>/helm-charts
 ```
-![image alt](pushed-packaged-ghcrio.png)
+![image alt](https://github.com/CoyApilado18/k8s-Helm/blob/7a9c14986d61a6127ca8602233890fdc3b60cfa9/images/pushed-packaged-ghcrio.png)
+
+You can also see the package in your GitHub ghcr.io in "Packages". :)  
+
+And If you want to pull/download the chart locally run:
+```bash
+helm pull \
+  oci://ghcr.io/coyapilado18/helm-charts/ecomwebapp \
+  --version 0.1.1
+  ```
+This only downloads the package:
+```bash
+ecomwebapp-0.1.1.tgz
+``` 
+
+Extract it:
+```bash
+tar -xzf ecomwebapp-0.1.1.tgz
+```
+
+Then refer to steps 7,8,9 and 10 (helm install) to install the Chart.
+ 
+Or the easiest, just use the `helm` pull with `--untar` flag if you are pulling the chart from my GHCR. The command belo tells Helm to download and extract it in one command.
+```bash
+helm pull \
+  oci://ghcr.io/coyapilado18/helm-charts/ecomwebapp \
+  --version 0.1.1 \
+  --untar
+```
 
 # Thank you and happy Helming! :)
