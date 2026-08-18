@@ -338,7 +338,7 @@ tar -xzf ecomwebapp-0.1.1.tgz
 
 ### Then refer to steps 7,8,9 and 10 (helm install) to install the Chart.
  
-Or the easiest, just use the `helm` pull with `--untar` flag if you are pulling the chart from my GHCR. The command below tells Helm to download and extract it in one command the install the chart.
+Or the easiest, just use the `helm` pull with `--untar` flag if you are pulling the chart from my GHCR. The command below tells Helm to download and extract it in one command then install the chart.
 ```bash
 helm pull \
   oci://ghcr.io/coyapilado18/helm-charts/ecomwebapp \
